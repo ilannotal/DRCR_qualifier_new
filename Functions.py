@@ -24,6 +24,7 @@ def read_args():
     output_path = None
     qualifier_version = None
     DB_ip = None
+    Just_study_eye = 1
 
     parser = argparse.ArgumentParser(description="Qualifier arguments",
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -33,6 +34,7 @@ def read_args():
     parser.add_argument("-o", "--Output_path", type=str)
     parser.add_argument("-q", "--Qualifier_version", type=int)
     parser.add_argument("-d", "--DB_ip", type=str)
+    parser.add_argument("-j", "--Just_study_eye", type=int)
 
     args = parser.parse_args()
     config = vars(args)
@@ -58,6 +60,10 @@ def read_args():
         print('Abort - DB_ip hasnt been defined')
         valid_arg = 0
 
+    if config["Just_study_eye"] is None:
+        print('Abort - Just_studt_eye hasnt been defined')
+        valid_arg = 0
+
     try:
         if not os.path.isdir(config["Output_path"]):
             os.mkdir(config["Output_path"])
@@ -70,49 +76,54 @@ def read_args():
     output_path = config["Output_path"]
     qualifier_version = config["Qualifier_version"]
     DB_ip = config["DB_ip"]
+    Just_study_eye = config["Just_study_eye"]
 
     if qualifier_version not in [1, 2]:
         print('Abort - qualifier version should be 1 or 2, while inserted value = %d' % qualifier_version)
         valid_arg = 0
 
-    return pt_ID, eye, output_path, qualifier_version, DB_ip, valid_arg
+    if Just_studt_eye not in [0, 1]:
+        print('Abort - Just_study_eye should be 0 or 1, while inserted value = %d' % Just_study_eye)
+        valid_arg = 0
+
+    return pt_ID, eye, output_path, qualifier_version, DB_ip, Just_study_eye, valid_arg
 
 
-def mean_list(list):
-    list = [item.astype('float') for item in list if not np.isnan(item)]
-    if list == []:
-        return 0
-    else:
-        return round(statistics.mean(list), 3)
-
-
-def median_list(list):
-    list = [item.astype('float') for item in list if not np.isnan(item)]
-    if list == []:
-        return 0
-    else:
-        return round(statistics.median(list), 3)
-
-
-def std_list(list):
-    list = [item.astype('float') for item in list if not np.isnan(item)]
-    if len(list) < 2:
-        return 0
-    else:
-        return round(statistics.stdev(list), 3)
-
-
-def min_list(list):
-    list = [item.astype('float') for item in list if not np.isnan(item)]
-    if list == []:
-        return 0
-    else:
-        return round(min(list), 3)
-
-
-def max_list(list):
-    list = [item.astype('float') for item in list if not np.isnan(item)]
-    if list == []:
-        return 0
-    else:
-        return round(max(list), 3)
+# def mean_list(list):
+#     list = [item.astype('float') for item in list if not np.isnan(item)]
+#     if list == []:
+#         return 0
+#     else:
+#         return round(statistics.mean(list), 3)
+#
+#
+# def median_list(list):
+#     list = [item.astype('float') for item in list if not np.isnan(item)]
+#     if list == []:
+#         return 0
+#     else:
+#         return round(statistics.median(list), 3)
+#
+#
+# def std_list(list):
+#     list = [item.astype('float') for item in list if not np.isnan(item)]
+#     if len(list) < 2:
+#         return 0
+#     else:
+#         return round(statistics.stdev(list), 3)
+#
+#
+# def min_list(list):
+#     list = [item.astype('float') for item in list if not np.isnan(item)]
+#     if list == []:
+#         return 0
+#     else:
+#         return round(min(list), 3)
+#
+#
+# def max_list(list):
+#     list = [item.astype('float') for item in list if not np.isnan(item)]
+#     if list == []:
+#         return 0
+#     else:
+#         return round(max(list), 3)
