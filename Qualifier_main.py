@@ -22,7 +22,7 @@ from Qualifier import My_Qualifier, Logs
 from Functions import read_args
 
 if __name__ == "__main__":
-    local_testing = 1
+    local_testing = 0
 
     if local_testing == 0:
         pt_ID, eye, output_path, DB_ip, Just_study_eye, valid_arg = read_args()
@@ -31,7 +31,7 @@ if __name__ == "__main__":
         eye = 'R'
         output_path = r'\\172.17.102.175\Algorithm\Production\DRCR_predictor\Testing'
         DB_ip = '172.30.2.246'
-        Just_study_eye = 0
+        Just_study_eye = 1
         valid_arg = 1
 
 
