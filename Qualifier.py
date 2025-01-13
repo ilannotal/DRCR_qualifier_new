@@ -14,7 +14,6 @@ based on the following Taylor request:
 import pandas as pd
 import os
 import pyodbc
-import numpy as np
 from datetime import datetime
 import warnings
 
@@ -60,20 +59,20 @@ class Logs:
 
 
 class My_Qualifier:
-    def __init__(self, pt_ID, eye, output_path, qualifier_version, DB_ip, Just_study_eye, logs):
+    def __init__(self, pt_ID, eye, output_path, DB_ip, Just_study_eye, logs):
         self.pt_ID = pt_ID
         self.eye = eye
         self.output_path = output_path
-        self.qualifier_version = qualifier_version
         self.Just_study_eye = Just_study_eye
         self.logs = logs
         self.required_number_of_scans = 1
         self.max_required_number_of_scans = 3
         self.number_of_failed_cal = 3  # Abort if there are 3 failed calibrations
+        self.actual_num_cal_failure = 0    #Actual number of failed calibrations
         self.save_result_csv = 'Qualifier_results.csv'
         self.save_scan_data_csv = 'Qualifer_scan_data.csv'
         self.missing_data_device_ID = 0
-        self.missing_data_analysis_ID = 1
+        self.not_study_eye_ID = 5
         self.qualified_ID = 2
         self.disqualified_ID = 3
         self.screen_failure_ID = 4
@@ -98,28 +97,22 @@ class My_Qualifier:
         if self.is_missing_scans == 1: return
 
         self.check_failed_scans()
-        if self.is_failed_scans == 1: return
+        #if self.is_failed_scans == 1: return
 
-        # self.check_aup_data()
-        # if self.is_missing_aup == 1: return
-        #
-        # self.extract_parameters()
         self.save_scan_data()
-        # # self.evaluate_features()
-        #
-        if self.is_failed_scans == 0:
-            result_str = 'Eye is qualified for monitoring'
-            self.result_df.loc[0, 'ResultID'] = int(self.qualified_ID)
-            self.result_df.loc[0, 'Message'] = result_str
-        else:
-            result_str = 'Eye is disqualified for monitoring'
-            self.result_df.loc[0, 'ResultID'] = int(self.disqualified_ID)
-            self.result_df.loc[0, 'Message'] = result_str
 
-        self.logs.insert_log(result_str, self.logs.Qualifier_ID, self.logs.DiagnosticsID, self.logs.SucceedID)
+        # if self.is_failed_scans == 0:
+        #     result_str = 'Eye is qualified for monitoring'
+        #     self.result_df.loc[0, 'ResultID'] = int(self.qualified_ID)
+        #     self.result_df.loc[0, 'Message'] = result_str
+        # else:
+        #     result_str = 'Eye is disqualified for monitoring'
+        #     self.result_df.loc[0, 'ResultID'] = int(self.disqualified_ID)
+        #     self.result_df.loc[0, 'Message'] = result_str
         #
-        # # self.eval_model()
-        self.save_results()
+        # self.logs.insert_log(result_str, self.logs.Qualifier_ID, self.logs.DiagnosticsID, self.logs.SucceedID)
+        #
+        # self.save_results()
 
         self.logs.insert_log('Qualifier suceess', self.logs.UnitExeRunStatusID, self.logs.DiagnosticsID,
                              self.logs.SucceedID)
@@ -157,6 +150,16 @@ class My_Qualifier:
             """ % (self.pt_ID, self.eye)
         df_study_eye = pd.io.sql.read_sql(study_eye_query, self.conn)
         self.not_study_eye = ~df_study_eye.Isincluded[0]
+        message = 'Not study eye' if self.not_study_eye else 'Study eye'
+        if self.not_study_eye:
+            message = 'Not study eye'
+            self.result_df.loc[0, 'Message'] = message
+            self.result_df.loc[0, 'ResultID'] = int(self.not_study_eye)
+            self.logs.insert_log(message, self.logs.Qualifier_ID, self.logs.DiagnosticsID, self.logs.FailedID)
+            self.logs.insert_abort_log()
+            self.save_results()
+        else:
+            self.logs.insert_log('Success in study eye check', self.logs.Qualifier_ID, self.logs.DiagnosticsID, self.logs.SucceedID)
 
     def check_failed_calibration(self):
         # The function checks if we have self.number_of_failed_cal failed calibrations
@@ -178,10 +181,13 @@ class My_Qualifier:
             message = 'Screen failure - %d failed calibrations' % (self.number_of_failed_cal)
             self.result_df.loc[0, 'Message'] = message
             self.is_missing_scans = 1 #Failed calibrations
-            self.logs.insert_log(message, self.logs.Qualifier_ID, self.logs.ErrorID, self.logs.FailedID)
+            self.logs.insert_log(message, self.logs.Qualifier_ID, self.logs.DiagnosticsID, self.logs.FailedID)
             self.logs.insert_abort_log()
             self.save_results()
             self.is_failed_cal = 1
+        else:
+            self.logs.insert_log('Success in calibration check', self.logs.Qualifier_ID, self.logs.DiagnosticsID, self.logs.SucceedID)
+            self.actual_num_cal_failure = num_cal_failures
         return
 
     def check_number_of_scans(self):
@@ -209,28 +215,31 @@ class My_Qualifier:
         number_of_cal_scans = len(self.cal_scans)
         self.raster_scans = [scan for scan in scans if 'TST' in scan]
         self.raster_scans_ids = [scans_ids[n] for n in range(0, len(scans_ids)) if 'TST' in scans[n]]
-        number_of_raster_scans = len(self.raster_scans)
+        self.number_of_raster_scans = len(self.raster_scans)
 
-        if number_of_cal_scans < 1:
+        if ((number_of_cal_scans < self.number_of_failed_cal) & (self.actual_num_cal_failure == number_of_cal_scans)):
+            self.is_missing_scans = 1
             self.result_df.loc[0, 'ResultID'] = self.missing_data_device_ID
-            message = 'Missing data - this eye doesnt have calibration scans'
+            message = 'Missing data - this eye does not have a successful calibration scan'
             self.result_df.loc[0, 'Message'] = message
             self.is_missing_scans = 1 #No calibrations
-            self.logs.insert_log(message, self.logs.Qualifier_ID, self.logs.ErrorID, self.logs.FailedID)
+            self.logs.insert_log(message, self.logs.Qualifier_ID, self.logs.DiagnosticsID, self.logs.FailedID)
             self.logs.insert_abort_log()
             self.save_results()
 
-        if number_of_raster_scans < self.required_number_of_scans:
-            self.result_df.loc[0, 'ResultID'] = int(self.missing_data_device_ID)
-            message = 'Missing data - this eye has %s raster scans where %s are required' % (
-            number_of_raster_scans, self.required_number_of_scans)
+        elif self.number_of_raster_scans < self.required_number_of_scans:
+            self.result_df.loc[0, 'ResultID'] = self.missing_data_device_ID
+            message = 'Missing data - this eye has %s raster scans where %s is required' % (
+            self.number_of_raster_scans, self.required_number_of_scans)
             self.result_df.loc[0, 'Message'] = message
             self.is_missing_scans = 1 #Less than required raster scans
-            self.logs.insert_log(message, self.logs.Qualifier_ID, self.logs.ErrorID, self.logs.FailedID)
+            self.logs.insert_log(message, self.logs.Qualifier_ID, self.logs.DiagnosticsID, self.logs.FailedID)
             self.logs.insert_abort_log()
             self.save_results()
         else:
-            self.actual_number_of_scans = max(self.required_number_of_scans, min(number_of_raster_scans, self.max_required_number_of_scans))
+            message = 'This eye has %s raster scans where %s are required' % (self.number_of_raster_scans, self.required_number_of_scans)
+            self.logs.insert_log(message, self.logs.Qualifier_ID, self.logs.DiagnosticsID , self.logs.SucceedID)
+            self.actual_number_of_scans = max(self.required_number_of_scans, min(self.number_of_raster_scans, self.max_required_number_of_scans))
             self.raster_scans = self.raster_scans[0:self.actual_number_of_scans]
             self.raster_scans_ids = self.raster_scans_ids[0:self.actual_number_of_scans]
 
@@ -240,10 +249,9 @@ class My_Qualifier:
 
         self.aup_df = pd.DataFrame(
             columns=['ScanID', 'VGAup', 'DNAup', 'RunModeTypeID', 'UpdateLongiPositions', 'EligibleQuant', 'StudyEye'])
-
-        for scan in self.raster_scans_ids:
+        message = ""
+        for index,scan in enumerate(self.raster_scans_ids):
             self.is_failed_scans = 0
-            message = ""
             self.cursor.execute('DECLARE @Scan int; set @Scan = ?; \
             select Top 1 s.ScanID, s.Eye, VG_aup.ID as VG_aup, NOA_aup.ID as DN_aup, \
             VG_aup.RunModeTypeID as RunModeTypeID, VG_ScanOutput.UpdateLongiPositions as UpdateLongiPositions, \
@@ -277,180 +285,35 @@ class My_Qualifier:
             self.aup_df = pd.concat([self.aup_df, new_row_df], ignore_index=True)
 
             new_row_df = new_row_df[((new_row_df.UpdateLongiPositions == 1) & (new_row_df.EligibleQuant == 1))]
-            if len(new_row_df) == 0:
-                self.is_failed_scans = 1
-                self.result_df.loc[0, 'ResultID'] = int(self.missing_data_analysis_ID)
-                message = 'Missing data - scan %d doesnt have VG analysis' % (scan)
-                self.result_df.loc[0, 'Message'] = message
-                self.logs.insert_log(message, self.logs.Qualifier_ID, self.logs.ErrorID, self.logs.FailedID)
-                self.logs.insert_abort_log()
+
+            if len(new_row_df) > 0:
+                result_str = 'Scan %d is eligible. Eye is qualified for monitoring' % scan
+                self.logs.insert_log(result_str, self.logs.Qualifier_ID, self.logs.DiagnosticsID, self.logs.SucceedID)
+                self.result_df.loc[0, 'ResultID'] = int(self.qualified_ID)
+                self.result_df.loc[0, 'Message'] = result_str
                 self.save_results()
-                continue
-        #     """
-        # SELECT s.ScanID, EyeOrdinalOrder, vg.NextAnalysisUnitRunModeTypeID as SwitchToUsage,
-        # LongiCalAup.IsFinalResult LongiAupIsFinalResult, LongiCalAup.EndTime LongiAupEndTime,
-        # commonAup.IsFinalResult commonAupIsFinalResult,
-        # commonAup.RunResult commonAupResult, LongiCalAup.CfgID
-        # FROM Scan s
-        # JOIN Session se ON se.SessionID = s.SessionID
-        # JOIN AnalysisUnitProcess LongiCalAup ON LongiCalAup.ScanID = s.ScanID AND LongiCalAup.RunMOdeTypeID = 0
-        # JOIN AnalysisUnitDetails aud ON aud.ID = LongiCalAup.AnalysisUnitDetailsID
-        # LEFT JOIN AnalysisUnitProcess commonAup ON commonAup.RunModeTypeID = 3 AND LongiCalAup.ScanID = commonAup.ScanID
-        # LEFT JOIN VG_ScanOutput vg ON vg.AnalysisUnitProcessID = LongiCalAup.ID
-        # WHERE s.ConfigurationTypeID = 2 AND s.AnalysisStatusTypeID <> 0
-        # AND aud.UnitTypeID IN (6,12)
-        # AND se.PatientID = %d AND s.Eye = '%s'
-        # ORDER BY EyeOrdinalOrder
-        # """ % (self.pt_ID, self.eye)
+                break
 
-        if self.is_failed_scans == 1:
-            message = 'All %d raster scans failed - eye is disqualified' % self.max_required_number_of_scans
-            self.logs.insert_log(message, self.logs.Qualifier_ID, self.logs.DiagnosticsID, self.logs.SucceedID)
-            self.result_df.loc[0, 'ResultID'] = int(self.disqualified_ID)
-            self.result_df.loc[0, 'Message'] = 'Eye is disqualified for monitoring'
-            self.save_results()
-            self.logs.insert_log('Qualifier suceess', self.logs.UnitExeRunStatusID, self.logs.DiagnosticsID,
-                                 self.logs.SucceedID)
-        return
+            self.is_failed_scans = 1
+            #self.result_df.loc[0, 'ResultID'] = int(self.missing_data_analysis_ID)
+            message = 'Missing data - scan %d is not eligible' % (scan)
+            #self.result_df.loc[0, 'Message'] = message
+            self.logs.insert_log(message, self.logs.Qualifier_ID, self.logs.DiagnosticsID, self.logs.FailedID)
+            continue
+        if self.is_failed_scans:
+            if self.actual_number_of_scans == self.max_required_number_of_scans:
+                message = 'All %d raster scans failed - eye is disqualified' % self.max_required_number_of_scans
+                self.logs.insert_log(message, self.logs.Qualifier_ID, self.logs.DiagnosticsID, self.logs.FailedID)
+                self.result_df.loc[0, 'ResultID'] = int(self.disqualified_ID)
+                self.result_df.loc[0, 'Message'] = 'Eye is disqualified for monitoring'
+                self.save_results()
+            else:
+                message = 'All %d raster scans failed - waiting for more scans...' % self.actual_number_of_scans
+                self.logs.insert_log(message, self.logs.Qualifier_ID, self.logs.DiagnosticsID, self.logs.FailedID)
+                self.result_df.loc[0, 'ResultID'] = int(self.missing_data_device_ID)
+                self.result_df.loc[0, 'Message'] = message
+                self.save_results()
 
-    # def get_latest_cfg(self):
-    #     # The function checks what is the latest cfg of the analysis
-    #     self.cfg_ID = -1
-    #     scan_string = "','".join(self.raster_scans)
-    #     scan_string = "('" + scan_string + "')"
-    #     q = """
-    #     select DISTINCT _Study.Name,_Patient.patientid,_Patient.StudySubjectID,scan.EndTime,scan.Eye,scan.UniqueIdentifier,AnalysisUnitDetails.UnitTypeID, aup.*
-    #     from AnalysisUnitProcess as aup
-    #     JOIN AnalysisUnitDetails ON AnalysisUnitDetails.ID = aup.AnalysisUnitDetailsID
-    #     join scan on scan.ScanID = aup.ScanID
-    #     join Session on session.SessionID = scan.SessionID
-    #     join _Patient on _Patient.PatientID = Session.PatientID
-    #     join _patienteyestudy on _patienteyestudy.patientid = _patient.patientid
-    #     join _Study on _Study.StudyID = _patienteyestudy.StudyID
-    #     join _user on _patient.userid = _user.userid
-    #     where _patient.patientid = %d  and aup.RunModeTypeID = 1 and scan.Eye = '%s'
-    #     and scan.UniqueIdentifier in %s
-    #     order by scan.Eye, aup.RunModeTypeID, scan.EndTime asc
-    #     """ % (self.pt_ID, self.eye, scan_string)
-    #     df = pd.io.sql.read_sql(q, self.conn)
-    #     if not df.empty:
-    #         self.cfg_ID = int((df.CfgID).max())
-    #     return
-
-    # def check_aup_data(self):
-    #     # The function checks if all VG aups exist for the first scans, and if NOA aups
-    #     # exist
-    #     self.is_missing_aup = 0
-    #     self.get_latest_cfg()
-    #
-    #     for n, scan in enumerate(self.raster_scans):
-    #         self.is_missing_aup = 0
-    #         self.cursor.execute('DECLARE @Scan varchar(50);set @Scan = ?; \
-    #         DECLARE @CfgID int;set @CfgID = ?; \
-    #         select aup.ID,scan.scanid,AnalyzerLogDetails.StatusTypeID from analysisunitprocess as aup  \
-    #         JOIN scan ON aup.scanid = scan.scanid  \
-    #         JOIN VG_ScanOutput ON VG_ScanOutput.AnalysisUnitProcessID = aup.ID  \
-    #         join AnalyzerLog on AnalyzerLog.AnalysisUnitProcessID = aup.ID  \
-    #         join AnalyzerLogDetails on AnalyzerLogDetails.RunID = AnalyzerLog.RunID  \
-    #         where scan.uniqueidentifier = @Scan and aup.RunModeTypeID = 1  \
-    #         and AnalyzerLogDetails.operationid = 11  \
-    #         and aup.CfgID = @CfgID \
-    #         AND AnalyzerLogDetails.ExceptionTypeID IS NULl', scan, self.cfg_ID)
-    #         records = self.cursor.fetchall()
-    #         if len(records) == 0:
-    #             self.is_missing_aup = 1
-    #             self.result_df.loc[0, 'ResultID'] = int(self.missing_data_analysis_ID)
-    #             message = 'Missing data - scan %d doesnt have VG analysis' % (self.raster_scans_ids[n])
-    #             self.result_df.loc[0, 'Message'] = message
-    #             self.logs.insert_log(message, self.logs.Qualifier_ID, self.logs.ErrorID, self.logs.FailedID)
-    #             self.logs.insert_abort_log()
-    #             self.save_results()
-    #             continue
-    #
-    #         else:  # Check NOA if VG ended succesfuly
-    #             # VG_final_status = records[0][1]
-    #             # if VG_final_status in [1,4]: # Should be DN analysis
-    #             self.cursor.execute('DECLARE @Scan varchar(50);set @Scan = ?; \
-    #             DECLARE @CfgID int;set @CfgID = ?; \
-    #             select aup.ID,scan.scanid from analysisunitprocess as aup  \
-    #             JOIN scan ON aup.scanid = scan.scanid  \
-    #             INNER JOIN AnalysisUnitDetails as aud on aup.AnalysisUnitDetailsID = aud.ID\
-    #             INNER JOIN AnalysisUnitType as aut ON aud.UnitTypeID = aut.ID\
-    #             INNER JOIN AnalysisOutputType aot ON aut.OutputTypeID = aot.ID\
-    #             where aot.Name = ?\
-    #             and aup.CfgID = @CfgID and\
-    #             scan.uniqueidentifier = @Scan and aup.RunModeTypeID = 1', scan, self.cfg_ID, 'DN')
-    #
-    #             records = self.cursor.fetchall()
-    #             if len(records) == 0:
-    #                 self.is_missing_aup = 1
-    #                 self.result_df.loc[0, 'ResultID'] = int(self.missing_data_analysis_ID)
-    #                 message = 'Missing data - scan %d doesnt have NOA analysis' % (self.raster_scans_ids[n])
-    #                 self.result_df.loc[0, 'Message'] = message
-    #                 self.logs.insert_log(message, self.logs.Qualifier_ID, self.logs.ErrorID, self.logs.FailedID)
-    #                 self.logs.insert_abort_log()
-    #                 self.save_results()
-    #                 continue
-
-    # def extract_aup_data(self):
-    #     # The function extracts the aup of each scan for both VG and NOA
-    #     aup_df = pd.DataFrame(columns=['Scan'])
-    #
-    #     self.cursor.execute('DECLARE @Patient int;set @Patient = ?; \
-    #     DECLARE @Eye char;set @Eye = ?; \
-    #     DECLARE @CfgID int;set @CfgID = ?; \
-    #     select DISTINCT scan.UniqueIdentifier, scan.ScanID, VG_aup.cfgID,\
-    #     VG_ScanOutput.QaReachedRast,VG_aup.ID ,AnalyzerLogDetails.StatusTypeID,\
-    #     scan.EndTime from scan \
-    #     JOIN AnalysisUnitProcess as VG_aup ON scan.ScanID = VG_aup.ScanID \
-    #     JOIN VG_ScanOutput ON VG_ScanOutput.AnalysisUnitProcessID = VG_aup.ID \
-    #     JOIN Session ON session.SessionID = scan.SessionID \
-    #     JOIN _Patient ON _Patient.PatientID = Session.PatientID \
-    #     join AnalyzerLog on AnalyzerLog.AnalysisUnitProcessID = VG_aup.ID  \
-    #     join AnalyzerLogDetails on AnalyzerLogDetails.RunID = AnalyzerLog.RunID  \
-    #     where _patient.patientid = @Patient AND SCAN.Eye = @Eye \
-    #     AND VG_aup.RunModeTypeID = 1 and AnalyzerLogDetails.operationid = 11 and  \
-    #     AnalyzerLogDetails.ExceptionTypeID IS NULl \
-    #     and VG_aup.CfgID = @CfgID\
-    #     order by scan.EndTime asc', self.pt_ID, self.eye, self.cfg_ID)
-    #
-    #     records_VG = self.cursor.fetchall()
-    #     count = -1
-    #     for row in records_VG:
-    #         count += 1
-    #         aup_df.loc[count, "Scan"] = row[0].replace(' ', '')
-    #         aup_df.loc[count, "ScanID"] = row[1]
-    #         aup_df.loc[count, "cfg"] = row[2]
-    #         aup_df.loc[count, "ReachedRaster"] = row[3]
-    #         aup_df.loc[count, "VG_aup"] = row[4]
-    #         aup_df.loc[count, "VG_status"] = row[5]
-    #
-    #     self.cursor.execute('DECLARE @Patient int;set @Patient = ?; \
-    #     DECLARE @Eye char;set @Eye = ?; \
-    #     DECLARE @CfgID int;set @CfgID = ?; \
-    #     SELECT DISTINCT DN_aup.ID, \
-    #     scan.UniqueIdentifier,DN_aup.CfgID from SCAN \
-    #     JOIN AnalysisUnitProcess as DN_aup ON scan.ScanID = DN_aup.ScanID \
-    #     INNER JOIN AnalysisUnitDetails as aud on DN_aup.AnalysisUnitDetailsID = aud.ID\
-    #     INNER JOIN AnalysisUnitType as aut ON aud.UnitTypeID = aut.ID\
-    #     INNER JOIN AnalysisOutputType aot ON aut.OutputTypeID = aot.ID\
-    #     JOIN Session ON session.SessionID = scan.SessionID \
-    #     JOIN _Patient ON _Patient.PatientID = Session.PatientID \
-    #     where _patient.patientid = @Patient AND SCAN.Eye = @Eye \
-    #     and  aot.Name = ?\
-    #     and DN_aup.CfgID = @CfgID\
-    #     AND DN_aup.RunModeTypeID = 1', self.pt_ID, self.eye, self.cfg_ID, 'DN')
-    #
-    #     records_DN = self.cursor.fetchall()
-    #     for row in records_DN:
-    #         DN_aup = row[0]
-    #         scan = row[1]
-    #         scan = scan.replace(' ', '')
-    #         cfg = row[2]
-    #         analysis_index = aup_df.index[(aup_df["Scan"] == scan) & (aup_df["cfg"] == cfg)]
-    #         aup_df.loc[analysis_index, "DN_aup"] = DN_aup
-    #
-    #     self.aup_df = aup_df
 
     def save_scan_data(self):
         # The function saves a csv with detailes of the scans used to evaluate
@@ -461,97 +324,6 @@ class My_Qualifier:
         self.scan_data_df['DNAup'] = self.aup_df['DN_aup'][0:self.actual_number_of_scans].astype(int)
         self.scan_data_df['StudyEye'] = self.aup_df['StudyEye'][0:self.actual_number_of_scans].astype(int)
         self.scan_data_df.to_csv(os.path.join(self.output_path, self.save_scan_data_csv), index=False)
-
-    # def extract_calibration_data(self):
-    #     # The function extracts the calibration parameters
-    #     first_scan = self.aup_df["Scan"][0]
-    #     self.cursor.execute("DECLARE @Scan varchar(50);set @Scan = ?; \
-    #                    select scan.StartDiopter,scan.StartReferenceArmPosition from scan \
-    #                    where scan.UniqueIdentifier = @Scan", first_scan)
-    #     cal_records = self.cursor.fetchall()
-    #     for row in cal_records:
-    #         self.parameters_df.loc[0, 'Diopter'] = row[0]
-    #         self.parameters_df.loc[0, 'Start_Refarm_Position'] = row[1]
-    #
-    #     all_scans = []
-    #     self.cursor.execute("DECLARE @Patient int;set @Patient = ?; \
-    #                    DECLARE @Eye char;set @Eye = ?;\
-    #                    select scan.UniqueIdentifier from scan \
-    #                    join Session on Session.SessionID =  scan.SessionID \
-    #                    join _Patient on _Patient.PatientID =  Session.PatientID \
-    #                    where _Patient.patientid = @Patient and scan.Eye = @Eye \
-    #                    order by Scan.StartTime", self.pt_ID, self.eye)
-    #     scan_records = self.cursor.fetchall()
-    #     for row in scan_records:
-    #         all_scans.append(row[0].replace(' ', ''))
-    #     is_cal = np.array(['CAL' in scan for scan in all_scans]).astype(int)
-    #
-    #     try:
-    #         first_cal_ind = np.where(is_cal)[0][0]
-    #     except:
-    #         first_cal_ind = 0
-    #
-    #     is_cal_diff = np.diff(is_cal)
-    #     num_calibrations = 1
-    #     for i in range(first_cal_ind, len(is_cal_diff)):
-    #         is_curr_cal = is_cal_diff[i]
-    #         if is_curr_cal == 0:
-    #             num_calibrations += 1
-    #         else:
-    #             break
-    #     self.parameters_df.loc[0, 'Num_calibrations'] = num_calibrations
-
-    # def extract_parameters(self):
-    #     # The function extracts the calibration and analysis parameters of the scans
-    #     self.extract_aup_data()
-    #     # The function returns a df with data from VG and DN for all relevant analysis units
-    #     VG_SCAN_DB_values = ['TotalScanTime', 'MeanBMsiVsr', 'QaReachedRast', 'RegStdX', 'RegStdY', 'LongiRegShiftX', \
-    #                          'LongiRegShiftY', 'MaxBMsiAll', '[MeanRetinalThickness3*3]', 'UpdateLongiPositions',
-    #                          'ClippedPrecent']
-    #     DN_SCAN_DB_values = ['EligibleQuant']
-    #     B_classes = [1, 2, 3, 4]
-    #     self.parameters_df = pd.DataFrame()
-    #
-    #     # Calibration
-    #     self.extract_calibration_data()
-    #
-    #     # Scan
-    #     for i in range(0, self.required_number_of_scans):
-    #         index = i
-    #         vg_aup = self.aup_df['VG_aup'][index]
-    #         vg_status = self.aup_df['VG_status'][index]
-    #         dn_aup = self.aup_df['DN_aup'][index]
-    #         for val in VG_SCAN_DB_values:
-    #             q = "select %s from VG_ScanOutput where VG_ScanOutput.AnalysisUnitProcessID = %d" % (val, vg_aup)
-    #             self.cursor.execute(q)
-    #             records = self.cursor.fetchall()
-    #             self.parameters_df.loc[0, '%s_%d' % (val, i)] = records[0][0]
-    #
-    #         for val in DN_SCAN_DB_values:
-    #             if vg_status in [1, 4]:
-    #                 q = "select %s from DN_ScanOutput where DN_ScanOutput.AnalysisUnitProcessID = %d" % (val, dn_aup)
-    #                 self.cursor.execute(q)
-    #                 records = self.cursor.fetchall()
-    #                 self.parameters_df.loc[0, '%s_%d' % (val, i)] = records[0][0]
-    #             else:
-    #                 if val == 'EligibleQuant':
-    #                     self.parameters_df.loc[0, '%s_%d' % (val, i)] = 0
-    #
-    #         for Class in B_classes:
-    #             q = "select cast(count(VG_BScanVSROutput.classType) as float)/cast(VG_ScanOutput.NumValidLines as float) as class1 \
-    #             from VG_BScanVSROutput join VG_ScanOutput on VG_ScanOutput.AnalysisUnitProcessID = VG_BScanVSROutput.AnalysisUnitProcessID \
-    #             where classType=%d and VG_ScanOutput.AnalysisUnitProcessID = %d \
-    #             group by VG_BScanVSROutput.AnalysisUnitProcessID,classType,VG_ScanOutput.NumValidLines" % (
-    #             Class, vg_aup)
-    #             self.cursor.execute(q)
-    #             records = self.cursor.fetchall()
-    #             if records == []:
-    #                 self.parameters_df.loc[0, 'Class%d_%d' % (Class, i)] = 0
-    #             else:
-    #                 self.parameters_df.loc[0, 'Class%d_%d' % (Class, i)] = records[0][0]
-    #
-    #     self.logs.insert_log('Extracting parameters', self.logs.Qualifier_ID, self.logs.DiagnosticsID,
-    #                          self.logs.SucceedID)
 
 
     def save_results(self):

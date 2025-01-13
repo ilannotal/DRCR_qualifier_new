@@ -11,8 +11,6 @@ based on the following Taylor request:
 %Changed by ilan
 """
 
-import numpy as np
-import statistics
 import argparse
 import os
 
@@ -22,7 +20,6 @@ def read_args():
     pt_ID = None
     eye = None
     output_path = None
-    qualifier_version = None
     DB_ip = None
     Just_study_eye = 1
 
@@ -32,7 +29,6 @@ def read_args():
     parser.add_argument("-p", "--Patient_ID", type=int)
     parser.add_argument("-e", "--Eye", type=str)
     parser.add_argument("-o", "--Output_path", type=str)
-    parser.add_argument("-q", "--Qualifier_version", type=int)
     parser.add_argument("-d", "--DB_ip", type=str)
     parser.add_argument("-j", "--Just_study_eye", type=int)
 
@@ -41,27 +37,23 @@ def read_args():
     # print(config)
 
     if config["Patient_ID"] is None:
-        print('Abort - Patient ID hasnt been defined')
+        print('Abort - Patient ID has not been defined')
         valid_arg = 0
 
     if config["Eye"] is None:
-        print('Abort - Eye hasnt been defined')
+        print('Abort - Eye has not been defined')
         valid_arg = 0
 
     if config["Output_path"] is None:
         print('Abort - Output_path hasnt been defined')
         valid_arg = 0
 
-    if config["Qualifier_version"] is None:
-        print('Abort - qualifier_version hasnt been defined')
-        valid_arg = 0
-
     if config["DB_ip"] is None:
-        print('Abort - DB_ip hasnt been defined')
+        print('Abort - DB_ip has not been defined')
         valid_arg = 0
 
     if config["Just_study_eye"] is None:
-        print('Abort - Just_studt_eye hasnt been defined')
+        print('Abort - Just_study_eye has not been defined')
         valid_arg = 0
 
     try:
@@ -74,56 +66,11 @@ def read_args():
     pt_ID = config["Patient_ID"]
     eye = config["Eye"]
     output_path = config["Output_path"]
-    qualifier_version = config["Qualifier_version"]
     DB_ip = config["DB_ip"]
     Just_study_eye = config["Just_study_eye"]
 
-    if qualifier_version not in [1, 2]:
-        print('Abort - qualifier version should be 1 or 2, while inserted value = %d' % qualifier_version)
-        valid_arg = 0
-
-    if Just_studt_eye not in [0, 1]:
+    if Just_study_eye not in [0, 1]:
         print('Abort - Just_study_eye should be 0 or 1, while inserted value = %d' % Just_study_eye)
         valid_arg = 0
 
-    return pt_ID, eye, output_path, qualifier_version, DB_ip, Just_study_eye, valid_arg
-
-
-# def mean_list(list):
-#     list = [item.astype('float') for item in list if not np.isnan(item)]
-#     if list == []:
-#         return 0
-#     else:
-#         return round(statistics.mean(list), 3)
-#
-#
-# def median_list(list):
-#     list = [item.astype('float') for item in list if not np.isnan(item)]
-#     if list == []:
-#         return 0
-#     else:
-#         return round(statistics.median(list), 3)
-#
-#
-# def std_list(list):
-#     list = [item.astype('float') for item in list if not np.isnan(item)]
-#     if len(list) < 2:
-#         return 0
-#     else:
-#         return round(statistics.stdev(list), 3)
-#
-#
-# def min_list(list):
-#     list = [item.astype('float') for item in list if not np.isnan(item)]
-#     if list == []:
-#         return 0
-#     else:
-#         return round(min(list), 3)
-#
-#
-# def max_list(list):
-#     list = [item.astype('float') for item in list if not np.isnan(item)]
-#     if list == []:
-#         return 0
-#     else:
-#         return round(max(list), 3)
+    return pt_ID, eye, output_path, DB_ip, Just_study_eye, valid_arg
