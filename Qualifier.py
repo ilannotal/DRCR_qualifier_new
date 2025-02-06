@@ -271,28 +271,29 @@ class My_Qualifier:
             #--and DN_ScanOutput.EligibleQuant = 1'
 
             records = self.cursor.fetchall()
-            new_row = {
-                'ScanID': scan,
-                'VG_aup': records[0].VG_aup,
-                'DN_aup': records[0].DN_aup,
-                'RunModeTypeID': records[0].RunModeTypeID,
-                'UpdateLongiPositions': records[0].UpdateLongiPositions,
-                'EligibleQuant': records[0].EligibleQuant,
-                'StudyEye': records[0].Isincluded
-            }
-            # Append the new row to the DataFrame
-            new_row_df = pd.DataFrame([new_row])
-            self.aup_df = pd.concat([self.aup_df, new_row_df], ignore_index=True)
+            if len(records) > 0:
+                new_row = {
+                    'ScanID': scan,
+                    'VG_aup': records[0].VG_aup,
+                    'DN_aup': records[0].DN_aup,
+                    'RunModeTypeID': records[0].RunModeTypeID,
+                    'UpdateLongiPositions': records[0].UpdateLongiPositions,
+                    'EligibleQuant': records[0].EligibleQuant,
+                    'StudyEye': records[0].Isincluded
+                }
+                # Append the new row to the DataFrame
+                new_row_df = pd.DataFrame([new_row])
+                self.aup_df = pd.concat([self.aup_df, new_row_df], ignore_index=True)
 
-            new_row_df = new_row_df[((new_row_df.UpdateLongiPositions == 1) & (new_row_df.EligibleQuant == 1))]
+                new_row_df = new_row_df[((new_row_df.UpdateLongiPositions == 1) & (new_row_df.EligibleQuant == 1))]
 
-            if len(new_row_df) > 0:
-                result_str = 'Scan %d is eligible. Eye is qualified for monitoring' % scan
-                self.logs.insert_log(result_str, self.logs.Qualifier_ID, self.logs.DiagnosticsID, self.logs.SucceedID)
-                self.result_df.loc[0, 'ResultID'] = int(self.qualified_ID)
-                self.result_df.loc[0, 'Message'] = result_str
-                self.save_results()
-                break
+                if len(new_row_df) > 0:
+                    result_str = 'Scan %d is eligible. Eye is qualified for monitoring' % scan
+                    self.logs.insert_log(result_str, self.logs.Qualifier_ID, self.logs.DiagnosticsID, self.logs.SucceedID)
+                    self.result_df.loc[0, 'ResultID'] = int(self.qualified_ID)
+                    self.result_df.loc[0, 'Message'] = result_str
+                    self.save_results()
+                    break
 
             self.is_failed_scans = 1
             #self.result_df.loc[0, 'ResultID'] = int(self.missing_data_analysis_ID)
@@ -320,8 +321,8 @@ class My_Qualifier:
         # the qualification - scan ID, VG aup and NOA aup
         self.scan_data_df = pd.DataFrame(columns=['ScanID', 'VGAup', 'DNAup', 'StudyEye'])
         self.scan_data_df['ScanID'] = self.aup_df['ScanID'][0:self.actual_number_of_scans].astype(int)
-        self.scan_data_df['VGAup'] = self.aup_df['VG_aup'][0:self.actual_number_of_scans].astype(int)
-        self.scan_data_df['DNAup'] = self.aup_df['DN_aup'][0:self.actual_number_of_scans].astype(int)
+        self.scan_data_df['VGAup'] = self.aup_df['VGAup'][0:self.actual_number_of_scans].astype(int)
+        self.scan_data_df['DNAup'] = self.aup_df['DNAup'][0:self.actual_number_of_scans].astype(int)
         self.scan_data_df['StudyEye'] = self.aup_df['StudyEye'][0:self.actual_number_of_scans].astype(int)
         self.scan_data_df.to_csv(os.path.join(self.output_path, self.save_scan_data_csv), index=False)
 
