@@ -248,7 +248,7 @@ class My_Qualifier:
         # case this eye is disqualified
 
         self.aup_df = pd.DataFrame(
-            columns=['ScanID', 'VGAup', 'DNAup', 'RunModeTypeID', 'UpdateLongiPositions', 'EligibleQuant', 'StudyEye'])
+            columns=['ScanID', 'VG_aup', 'DN_aup', 'RunModeTypeID', 'UpdateLongiPositions', 'EligibleQuant', 'StudyEye'])
         message = ""
         for index,scan in enumerate(self.raster_scans_ids):
             self.is_failed_scans = 0
@@ -319,10 +319,10 @@ class My_Qualifier:
     def save_scan_data(self):
         # The function saves a csv with detailes of the scans used to evaluate
         # the qualification - scan ID, VG aup and NOA aup
-        self.scan_data_df = pd.DataFrame(columns=['ScanID', 'VGAup', 'DNAup', 'StudyEye'])
+        self.scan_data_df = pd.DataFrame(columns=['ScanID', 'VG_aup', 'DN_aup', 'StudyEye'])
         self.scan_data_df['ScanID'] = self.aup_df['ScanID'][0:self.actual_number_of_scans].astype(int)
-        self.scan_data_df['VGAup'] = self.aup_df['VGAup'][0:self.actual_number_of_scans].astype(int)
-        self.scan_data_df['DNAup'] = self.aup_df['DNAup'][0:self.actual_number_of_scans].astype(int)
+        self.scan_data_df['VG_aup'] = self.aup_df['VG_aup'][0:self.actual_number_of_scans].astype(int)
+        self.scan_data_df['DN_aup'] = self.aup_df['DN_aup'][0:self.actual_number_of_scans].astype(int)
         self.scan_data_df['StudyEye'] = self.aup_df['StudyEye'][0:self.actual_number_of_scans].astype(int)
         self.scan_data_df.to_csv(os.path.join(self.output_path, self.save_scan_data_csv), index=False)
 

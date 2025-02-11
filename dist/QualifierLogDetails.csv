@@ -1,0 +1,4 @@
+OperationID,Details,ActionTypeID,StatusTypeID,InsertionTime
+11,Qualifier started successfully,1,1,2025-01-13 11:38:28.138360
+11,Failed to connect to DB,0,0,2025-01-13 11:38:28.141761
+11,Qualifier failed,0,0,2025-01-13 11:38:28.142588

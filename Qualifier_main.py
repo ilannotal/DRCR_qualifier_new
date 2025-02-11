@@ -27,8 +27,8 @@ if __name__ == "__main__":
     if local_testing == 0:
         pt_ID, eye, output_path, DB_ip, Just_study_eye, valid_arg = read_args()
     else:
-        pt_ID = 5290
-        eye = 'L'
+        pt_ID = 5318
+        eye = 'R'
         output_path = r'\\172.17.102.175\Algorithm\Production\DRCR_predictor\Testing'
         DB_ip = '172.30.2.246'
         Just_study_eye = 1
